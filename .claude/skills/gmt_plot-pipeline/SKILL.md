@@ -83,23 +83,24 @@ GMT 文档查询：
 - 或使用 WebSearch 搜索 "GMT <模块名> docs generic-mapping-tools"
 - 或使用 WebFetch 访问 https://docs.generic-mapping-tools.org/latest/
 
-## 阶段四：视觉对比与反馈
+## 阶段四：PS 文件评估与反馈
 
-调用 `gmt_plot:compare` 技能对图件进行审阅。该技能通过 `scripts/compare.py` 脚本调用视觉模型。
+调用 `gmt_plot:compare` 技能对图件进行审阅。该技能通过 `scripts/compare_ps.py` 脚本
+读取 GMT 生成的 PS 文件（矢量文本格式），调用 deepseek-v4-pro 模型进行评估。
 
 流程：
-1. 确认工作目录存在 `.env` 文件（配置 `VISION_MODEL_NAME` 和 `VISION_API_KEY`）
-2. 运行 `scripts/compare.py <图件> plan.md review_report_[version].md` 调用视觉模型评估
-3. 视觉模型从六个维度（地理范围、数据呈现、标注完整性、排版美观、需求一致性、技术质量）进行评估
-4. 输出结构化审阅报告 `review_report_[version].md`,version表示第几轮审阅
-5. 报告包含不合格项、需改进项、修改优先级和具体修改建议
+1. 确认环境变量 `DEEPSEEK_API_KEY` 已设置
+2. 确认 PS 文件已由绘图阶段生成并保留
+3. 运行 `scripts/compare_ps.py <PS文件> plan.md review_report_[version].md` 调用模型评估
+4. 模型从六个维度（地理范围、数据呈现、标注完整性、排版美观、需求一致性、技术质量）进行评估
+5. 输出结构化审阅报告 `review_report_[version].md`,version表示第几轮审阅
+6. 报告包含不合格项、需改进项、修改优先级和具体修改建议
 
-**首次使用前**需在工作目录创建 `.env` 文件：
+**首次使用前**需设置环境变量：
+```bash
+export DEEPSEEK_API_KEY=your-deepseek-api-key
 ```
-VISION_MODEL_NAME=claude-sonnet-4-6
-VISION_API_KEY=your-api-key
-```
-并安装依赖：`pip install anthropic`
+并安装依赖：`pip install requests`
 
 ## 阶段五：修饰与迭代
 
@@ -144,7 +145,8 @@ VISION_API_KEY=your-api-key
 
 ### 最终图件
 - 文件路径: [绝对路径]
-- 文件格式: [PDF/PNG/JPG]
+- PS 文件: [.ps 文件路径]
+- 文件格式: [PS/PDF/PNG/JPG]
 - 文件大小: [大小]
 
 ### 图件说明
@@ -161,7 +163,7 @@ VISION_API_KEY=your-api-key
 ## 重要原则
 
 1. **每个阶段之间应该让用户确认**：计划确认后才下载，下载确认后才绘图
-2. **保存中间产物**：plan.md、gmt_plot.sh、review_report_[version].md 都应保存到工作目录
+2. **保存中间产物**：plan.md、gmt_plot.sh、*.ps、review_report_[version].md 都应保存到工作目录
 3. **安全性优先**：互联网下载和本地搜索必须获用户同意
 4. **文档查询**：不确定 GMT 模块参数时，主动查询文档而不是猜测
 5. **错误处理**：遇到错误时分析原因并修复，不要跳过

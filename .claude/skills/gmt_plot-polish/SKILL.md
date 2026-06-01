@@ -112,6 +112,7 @@ cat review_user.md
 首先把原来的生图脚本和生成的图件都拷贝一份，新命名加入版本相关的，如：
 ```bash
 cp gmt_plot.sh gmt_plot_[version].sh
+cp xxx.ps xxx_[version].ps
 cp xxx.pdf xxx_[version].pdf
 cp xxx.png xxx_[version].png
 ```
@@ -146,6 +147,7 @@ cp xxx.png xxx_[version].png
 
 ### 4. 重新绘图
 
+重新执行绘图脚本（确保输出格式包含 ps）：
 ```bash
 bash gmt_plot.sh
 # 或
@@ -154,7 +156,7 @@ python3 gmt_plot.py
 
 ### 5. 验证
 
-1. 确认新图件已生成
+1. 确认新图件已生成（包括 PS 文件）
 2. 使用 Read 工具查看新图件
 3. 对照反馈检查是否已修复
 
@@ -175,6 +177,7 @@ python3 gmt_plot.py
 
 ### 新图件
 - 文件路径: [绝对路径]
+- PS 文件: [.ps 文件路径]
 - 文件大小: [大小]
 ```
 
@@ -183,4 +186,4 @@ python3 gmt_plot.py
 - 如果你不确定用户的意图，先确认再修改
 - 保留用户未提及的代码部分，只修改需要改的地方
 - 修改前告知用户你的修改计划，获得认可后执行
-- 修改后告知用户可以调用 `gmt_plot:compare` 进行复查
+- 修改后告知用户可以调用 `gmt_plot:compare` 进行复查（使用 PS 文件）

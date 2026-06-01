@@ -25,7 +25,7 @@ GMT 绘图支持两种方式，优先使用 **Bash GMT 命令**方式（兼容�
 **Bash GMT 示例：**
 ```bash
 #!/bin/bash
-gmt begin map pdf
+gmt begin map pdf,png,ps
   gmt basemap -R70/140/15/55 -JM15c -Baf -BWSen+t"标题"
   gmt grdimage @earth_relief_01m -R70/140/15/55 -JM15c -Cgeo -I+d
   gmt coast -R70/140/15/55 -JM15c -W0.5p -N1/0.5p -Slightblue
@@ -53,6 +53,7 @@ fig.savefig("map.pdf")
 5. 确保色标（CPT）与数据类型匹配
 6. 添加必要的 `-I+d` 做地形渲染（地形图）
 7. 添加 `-V` 或 `-Vd` 参数以便调试时查看详细输出
+8. **必须保留 PS 文件**：`gmt begin` 的输出格式中必须包含 `ps`（如 `pdf,png,ps`），生成的 PS 文件不要删除，供后续 compare 阶段使用
 
 ### 查询 GMT 用法
 
@@ -111,10 +112,11 @@ python3 gmt_plot.py
 ### 5. 确认输出
 
 执行成功后：
-1. 确认输出文件已生成（PDF/PNG/JPG 等）
-2. 使用 `ls -lh <输出文件名>` 检查文件大小
-3. 如有图片文件，使用 Read 工具查看图片质量
-4. 记录输出文件路径
+1. 确认输出文件已生成（PS/PDF/PNG/JPG 等）
+2. **确认 PS 文件已保留**，不要删除 PS 文件
+3. 使用 `ls -lh <输出文件名>` 检查文件大小
+4. 如有图片文件，使用 Read 工具查看图片质量
+5. 记录输出文件路径
 
 ## 输出格式
 
@@ -129,8 +131,9 @@ python3 gmt_plot.py
 
 ### 输出文件
 - 主图件: [文件路径]
+- PS 文件: [.ps 文件路径]（保留，供 compare 阶段使用）
 - 文件大小: [大小]
-- 文件格式: [PDF/PNG/JPG]
+- 文件格式: [PS/PDF/PNG/JPG]
 
 ### 使用的模块
 - [模块1]: [用途]
