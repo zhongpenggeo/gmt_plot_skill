@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-GMT figure visual comparison and review script.
+GMT style reference image extraction script.
 
-Reads a generated GMT figure, reduces its resolution by half, then sends it
-together with the plotting plan to a vision model for evaluation.
+Reads a user-provided style reference figure, sends it to a vision model,
+and extracts GMT-compatible style parameters for use in plan generation.
 
 Usage:
-    python compare_imag.py <image_path> <plan.md> <output_report> [--iteration N] [--output-dir DIR]
+    python extract_style.py <style_image> [--output STYLE.md] [--output-dir DIR]
 
 Environment (.env file):
     VISION_MODEL_NAME   Vision model name (e.g. claude-sonnet-4-6, gpt-4o, gemini-2.5-flash, kimi-k2)
@@ -22,7 +22,7 @@ Supported providers (auto-detected from model name):
     - Others:    treated as OpenAI-compatible, must set VISION_API_BASE
 
 Output:
-    review_report_[version].md  Structured review report
+    STYLE.md  Structured GMT style specification
 """
 
 import os
@@ -37,33 +37,10 @@ load_dotenv()
 
 
 # ---------------------------------------------------------------------------
-# Environment
-# ---------------------------------------------------------------------------
-
-# def load_env(work_dir: Path):
-#     """Load environment variables from .env file."""
-#     env_file = work_dir / ".env"
-#     if not env_file.exists():
-#         return
-#     with open(env_file, "r") as f:
-#         for line in f:
-#             line = line.strip()
-#             if not line or line.startswith("#"):
-#                 continue
-#             if "=" in line:
-#                 key, _, value = line.partition("=")
-#                 key = key.strip()
-#                 value = value.strip().strip('"').strip("'")
-#                 if key and value and key not in os.environ:
-#                     os.environ[key] = value
-
-
-# ---------------------------------------------------------------------------
 # Image helpers
 # ---------------------------------------------------------------------------
 
 def get_image_mime_type(image_path: str) -> str:
-    """Determine MIME type from file extension."""
     ext = Path(image_path).suffix.lower()
     return {
         ".png": "image/png",
@@ -76,36 +53,11 @@ def get_image_mime_type(image_path: str) -> str:
 
 
 def encode_image(image_path: str) -> str:
-    """Base64-encode an image file."""
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
-def halve_image_resolution(image_path: str, work_dir: Path) -> str:
-    """Reduce image resolution by half (50% of original dimensions)."""
-    try:
-        from PIL import Image
-    except ImportError:
-        print("Warning: PIL not installed, cannot resize image. pip install Pillow")
-        return image_path
-
-    img = Image.open(image_path)
-    w, h = img.size
-    new_size = (w // 2, h // 2)
-    img = img.resize(new_size, Image.LANCZOS)
-
-    # Save as JPEG with same extension style
-    out_path = str(work_dir)[:-4]+"_review_half.jpg"
-    img = img.convert("RGB")  # ensure no alpha channel for JPEG
-    img.save(out_path, "JPEG", quality=85, optimize=True)
-    old_kb = os.path.getsize(image_path) / 1024
-    new_kb = os.path.getsize(out_path) / 1024
-    print(f"Image halved: {w}x{h} ({old_kb:.0f}KB) -> {new_size[0]}x{new_size[1]} ({new_kb:.0f}KB)")
-    return out_path
-
-
 def resolve_timeout() -> int:
-    """Resolve API request timeout from VISION_TIMEOUT env var."""
     try:
         return int(os.environ.get("VISION_TIMEOUT", "600"))
     except ValueError:
@@ -113,8 +65,7 @@ def resolve_timeout() -> int:
 
 
 def convert_pdf_to_jpg(pdf_path: str, output_dir: Path) -> str:
-    """Convert PDF to PNG using ghostscript or ImageMagick."""
-    jpg_path = str(output_dir / "_review_temp.jpg")
+    jpg_path = str(output_dir / "_style_temp.jpg")
     ret = os.system(
         f"gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r150 "
         f"-sOutputFile={jpg_path} {pdf_path} > /dev/null 2>&1"
@@ -132,79 +83,129 @@ def convert_pdf_to_jpg(pdf_path: str, output_dir: Path) -> str:
 # Prompt builder
 # ---------------------------------------------------------------------------
 
-def build_prompt(plan_content: str, iteration: int = 0) -> str:
-    """Build the review prompt for the vision model."""
-    return f"""You are a professional geoscience figure reviewer. Carefully examine this GMT-generated figure and evaluate it against the plotting plan requirements below.
+def build_style_extraction_prompt() -> str:
+    return """You are a GMT (Generic Mapping Tools) cartography expert. Carefully examine this reference figure and extract its visual style into a structured specification suitable for GMT plotting.
 
-## Plotting Plan (plan.md)
-{plan_content}
+Analyze every visual element and map it to concrete GMT parameters. Be as specific as possible.
 
-## Review Requirements
+## Extraction Dimensions
 
-Evaluate the figure across the following six dimensions:
+### 1. Color Palette (CPT)
+- Identify the dominant color scheme used for the main data layer (terrain, gravity, etc.)
+- What CPT type: sequential (light→dark single hue), diverging (two hues with neutral middle), or categorical?
+- Describe the key color transitions (e.g. "dark blue (#000080) at low values → cyan → yellow → dark red (#800000) at high values")
+- If terrain: is it like GMT's `geo`, `topo`, `globe`, `relief`, `dem1`, `dem2`, `dem3`, `dem4`?
+- If diverging: is it like `polar`, `haxby`, `roma`, `vik`?
+- What is the background color (land/ocean if applicable)?
+- Is there a color bar? Where is it positioned? What range and units?
 
-1. **Geographic Accuracy**: Does the figure cover the required region? Are latitude/longitude labels clear and correct?
-2. **Data Presentation Quality**: Is the terrain/data clearly visible? Is the color palette appropriate (intuitive tones, sufficient contrast)? Is the data resolution adequate?
-3. **Annotation Completeness**: Does the title exist and is it correct? Are lat/lon labels complete? Does the color bar have units and description? Is the legend present and correct?
-4. **Layout and Aesthetics**: Is the layout of all elements reasonable? Any overlapping or obscured elements? Are proportions balanced? Are borders and tick marks clear?
-5. **Requirement Consistency**: Are all required elements included? Do subplot count and arrangement match the plan? Are special annotations (scale bar, north arrow, etc.) present?
-6. **Technical Quality**: Are lines sharp (no aliasing or blur)? Do resolution and size meet output requirements? Are colors harmonious?
+### 2. Layout & Composition
+- Figure aspect ratio (portrait/landscape/square, estimate ratio like 16:9, 4:3, 1:1)
+- Number of subplots and their arrangement (rows × columns)
+- Is there a main map with inset(s)? How are insets positioned?
+- Relative sizing of map area vs. color bar vs. margins
+- What map projection appears to be used? (Mercator, Robinson, Mollweide, Lambert, UTM, etc.)
+
+### 3. Typography
+- Font family style: serif (Times-like) or sans-serif (Helvetica/Arial-like)?
+- Title font size relative to body (e.g. "~2× label size")
+- Label font size (small/medium/large)
+- Font weight: regular, bold, or mixed?
+- Title placement and alignment
+
+### 4. Map Frame & Annotations
+- Frame style: plain (black/white), fancy (checkered), or other?
+- Tick mark style: inside, outside, both? Tick interval/spacing?
+- Latitude/longitude annotation format: degrees-minutes-seconds, decimal degrees, with ° symbol?
+- Grid lines: present or absent? Solid or dashed? Spacing?
+- Border/neatline style
+
+### 5. Map Elements
+- Coastline style: thin/thick, black/gray/colored? High/medium/low resolution?
+- Political boundaries present? Style?
+- Scale bar: present? Position? Style?
+- North arrow / compass rose: present? Position?
+- Legend: present? Position? Style (boxed/minimal)?
+- Any special annotations or markers?
+
+### 6. Background & Terrain
+- Is there shaded relief / hillshading? If so, intensity level (subtle/strong)?
+- Is the background plain white/colored, or a terrain base?
+- Ocean fill color, if applicable?
+
+### 7. Overall Aesthetic
+- Describe the overall look-and-feel in 2-3 sentences
+- Is it publication-quality (clean, minimal)? Field-report style? Web/presentation style?
+- Target audience: scientific journal, report, presentation, poster?
 
 ## Output Format
 
 Output strictly in the following Markdown format:
 
 ```
-## Figure Review Report
+## Style Extraction Report
 
-### Basic Information
-- Reviewed figure: [filename]
-- Review time: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-- Review round: {iteration + 1}
+### 1. Color Palette
+- CPT recommendation: [closest GMT built-in CPT name, or "custom" with description]
+- CPT type: [sequential/diverging/categorical]
+- Key colors: [list hex codes or color names in order from low to high]
+- CPT range: [min to max if discernible]
+- Color bar position: [right/bottom/top/left, or "none"]
+- Background: land=[color] ocean=[color]
 
-### Passed Items
-- [List aspects that meet requirements, or write "All passed"]
+### 2. Layout
+- Aspect ratio: [description, e.g. "landscape ~16:9"]
+- Subplot arrangement: [e.g. "single panel", "2×2 grid of 4 panels"]
+- Map-to-colorbar ratio: [e.g. "map ~85%, color bar ~10% of width"]
+- Suggested GMT projection: [e.g. "-JM" (Mercator), "-JQ" (cylindrical equal-area)]
 
-### Items Needing Improvement
-- [List aspects that could be optimized but do not break functionality]
-  - Issue: [specific description]
-  - Suggestion: [specific fix, note GMT parameter or module name]
+### 3. Typography
+- Font family: [e.g. "Helvetica (sans-serif)", "Times (serif)"]
+- GMT font suggestion: [e.g. "Helvetica", "Helvetica-Bold", "Times-Roman"]
+- Title: size=[relative], weight=[regular/bold], position=[top-center, etc.]
+- Labels: size=[relative]
+- Annotation: size=[relative]
 
-### Failed Items (if any)
-- [List issues that do not meet plan requirements]
-  - Issue: [specific description]
-  - Requirement reference: [quote relevant part of plan.md]
-  - Suggestion: [specific fix, note GMT parameter or module name]
-  - Fix location: [script file and approximate line/parameter to change]
+### 4. Map Frame & Annotations
+- Frame style: [plain/fancy, GMT -B equivalent description]
+- Tick style: [inside/outside/both, interval]
+- Annotation format: [e.g. "ddd:mm (degrees and minutes)"]
+- Grid lines: [present/absent, style, spacing]
 
-### Overall Scores
-- Geographic Accuracy: [1-5 stars]
-- Data Presentation: [1-5 stars]
-- Annotation Completeness: [1-5 stars]
-- Layout & Aesthetics: [1-5 stars]
-- Requirement Consistency: [1-5 stars]
-- Technical Quality: [1-5 stars]
+### 5. Map Elements
+- Coastline: resolution=[low/medium/high], pen=[thickness,color]
+- Political boundaries: [present/absent, style if present]
+- Scale bar: [present/absent, position, style]
+- North arrow: [present/absent, position]
+- Legend: [present/absent, position, style]
 
-### Summary
-[A concise overall assessment highlighting main strengths and key issues to fix]
+### 6. Background & Terrain
+- Shaded relief: [present/absent, intensity]
+- Terrain base: [yes/no, if yes describe]
+- Ocean fill: [color if applicable]
 
-### Fix Priority
-[Prioritized list: data errors > missing features > annotation issues > visual quality > layout tweaks]
+### 7. Overall Aesthetic
+- Description: [2-3 sentence overall look-and-feel]
+- Style category: [publication / report / presentation / poster]
+- Key distinctive features: [1-3 things that define this style]
+
+### 8. GMT Implementation Guide
+[Provide a concise, actionable summary: key GMT parameters, CPT, font settings, and frame settings that would reproduce this style. Think of this as a "style recipe" for the plan.md.]
 ```
 
 Notes:
-- Evaluate strictly against plan.md requirements, not subjective preference
-- Point out issues clearly with specific GMT fix suggestions (e.g. "change CPT from 'geo' to 'topo'")
-- Distinguish between "must-fix" (Failed Items) and "nice-to-have" (Items Needing Improvement)
+- Focus on extracting concrete, actionable GMT parameters whenever possible
+- Use actual GMT parameter conventions (-B, -C, -J, etc.) in the Implementation Guide
+- If uncertain about something, note your confidence level and suggest reasonable defaults
+- The goal is to enable reproducing this figure's style with GMT
 """
 
 
 # ---------------------------------------------------------------------------
-# Provider routing
+# Provider routing (same as compare_imag.py)
 # ---------------------------------------------------------------------------
 
 def detect_provider(model_name: str) -> str:
-    """Detect the API provider from the model name."""
     lower = model_name.lower()
     if "claude" in lower:
         return "anthropic"
@@ -218,7 +219,6 @@ def detect_provider(model_name: str) -> str:
 
 
 def resolve_api_key(provider: str) -> str:
-    """Resolve API key, checking provider-specific env vars first."""
     key_map = {
         "anthropic": ["VISION_API_KEY", "ANTHROPIC_API_KEY"],
         "openai": ["VISION_API_KEY", "OPENAI_API_KEY"],
@@ -234,11 +234,9 @@ def resolve_api_key(provider: str) -> str:
 
 
 def resolve_base_url(provider: str) -> str:
-    """Resolve base URL. VISION_API_BASE overrides all defaults."""
     custom_base = os.environ.get("VISION_API_BASE", "")
     if custom_base:
         return custom_base.rstrip("/")
-
     defaults = {
         "anthropic": "https://api.anthropic.com",
         "openai": "https://api.openai.com/v1",
@@ -254,7 +252,6 @@ def resolve_base_url(provider: str) -> str:
 # ---------------------------------------------------------------------------
 
 def call_anthropic(image_path: str, prompt: str, model_name: str, api_key: str, base_url: str) -> str:
-    """Call Anthropic (Claude) vision API."""
     import anthropic
 
     mime_type = get_image_mime_type(image_path)
@@ -267,7 +264,6 @@ def call_anthropic(image_path: str, prompt: str, model_name: str, api_key: str, 
     client = anthropic.Anthropic(**client_kwargs)
     message = client.messages.create(
         model=model_name,
-        # max_tokens=100000,
         messages=[{
             "role": "user",
             "content": [
@@ -287,7 +283,6 @@ def call_anthropic(image_path: str, prompt: str, model_name: str, api_key: str, 
 
 
 def call_openai_compatible(image_path: str, prompt: str, model_name: str, api_key: str, base_url: str, timeout: int = 300) -> str:
-    """Call OpenAI-compatible vision API (OpenAI, Kimi, custom proxies)."""
     import requests
 
     mime_type = get_image_mime_type(image_path)
@@ -317,7 +312,6 @@ def call_openai_compatible(image_path: str, prompt: str, model_name: str, api_ke
 
 
 def call_gemini(image_path: str, prompt: str, model_name: str, api_key: str, base_url: str, timeout: int = 300) -> str:
-    """Call Google Gemini vision API."""
     import requests
 
     mime_type = get_image_mime_type(image_path)
@@ -331,7 +325,6 @@ def call_gemini(image_path: str, prompt: str, model_name: str, api_key: str, bas
                 {"inline_data": {"mime_type": mime_type, "data": image_data}},
             ]
         }],
-        # "generationConfig": {"maxOutputTokens": 4096},
     }
     resp = requests.post(url, json=payload, timeout=timeout)
     resp.raise_for_status()
@@ -352,29 +345,22 @@ def call_vision_model(
     provider: str,
     timeout: int = 300,
 ) -> str:
-    """Route to the appropriate vision API based on detected provider."""
     if provider == "anthropic":
         return call_anthropic(image_path, prompt, model_name, api_key, base_url)
     elif provider == "gemini":
         return call_gemini(image_path, prompt, model_name, api_key, base_url, timeout=timeout)
     else:
-        # openai, kimi, openai_compatible all use the same format
         return call_openai_compatible(image_path, prompt, model_name, api_key, base_url, timeout=timeout)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GMT figure visual comparison review")
-    parser.add_argument("image", help="Path to figure to review (png/jpg/pdf)")
-    parser.add_argument("plan", nargs="?", default="plan.md", help="Plotting plan file (default: plan.md)")
-    parser.add_argument("output", nargs="?", default="review_report_[version].md", help="Output review report path (default: review_report_[version].md)")
-    parser.add_argument("--iteration", type=int, default=0, help="Review round number (0-based, default: 0)")
-    parser.add_argument("--output-dir", default=".", help="Output directory for the review report (default: current dir)")
+    parser = argparse.ArgumentParser(description="GMT style reference image extraction")
+    parser.add_argument("image", help="Path to style reference figure (png/jpg/pdf)")
+    parser.add_argument("--output", default="STYLE.md", help="Output style report path (default: STYLE.md)")
+    parser.add_argument("--output-dir", default=".", help="Output directory (default: current dir)")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir).resolve()
-
-    # # Load .env
-    # load_env(work_dir)
 
     model_name = os.environ.get("VISION_MODEL_NAME", "")
     provider = detect_provider(model_name)
@@ -390,63 +376,44 @@ def main():
         print("  Kimi:      MOONSHOT_API_KEY")
         sys.exit(1)
 
-    # Read image
     image_path = args.image
     if not os.path.exists(image_path):
-        print(f"Error: image file not found: {image_path}")
+        print(f"Error: style image file not found: {image_path}")
         sys.exit(1)
 
     # Convert PDF if needed
     if image_path.lower().endswith(".pdf"):
-        jpg_path_halve = convert_pdf_to_jpg(image_path, output_dir)
-        
-    else: # png or jpg
-        jpg_path_halve = halve_image_resolution(image_path, output_dir)
-    
-    if os.path.exists(jpg_path_halve):
-        image_path = jpg_path_halve
+        jpg_path = convert_pdf_to_jpg(image_path, output_dir)
+        if os.path.exists(jpg_path):
+            image_path = jpg_path
 
-    # Resolve timeout
     timeout = resolve_timeout()
-
-    # Read plan (path taken directly as given, not relative to output-dir)
-    plan_path = Path(args.plan)
-    if plan_path.exists():
-        plan_content = plan_path.read_text(encoding="utf-8")
-    else:
-        plan_content = "(No plan file found, please review based on general figure standards)"
-
-    # Build prompt
-    prompt = build_prompt(plan_content, args.iteration)
+    prompt = build_style_extraction_prompt()
 
     print(f"Provider:  {provider}")
     print(f"Model:     {model_name}")
     print(f"Base URL:  {base_url}")
-    print(f"Figure:    {image_path}")
-    print(f"Plan:      {plan_path}")
-    print(f"Round:     {args.iteration + 1}")
+    print(f"Style ref: {image_path}")
     print(f"Timeout:   {timeout}s")
-    print("Calling vision model ...")
+    print("Extracting style from reference image ...")
 
-    # Call model
     try:
         result = call_vision_model(image_path, prompt, model_name, api_key, base_url, provider, timeout=timeout)
     except Exception as e:
         print(f"Error: vision model call failed: {e}")
         sys.exit(1)
 
-    # Save report (relative path resolved against output-dir)
     output_path = Path(args.output)
     if not output_path.is_absolute():
         output_path = output_dir / args.output
     output_path.write_text(result, encoding="utf-8")
-    print(f"Review report saved: {output_path}")
+    print(f"Style report saved: {output_path}")
 
     # Print key summary lines
-    print("\n--- Review Summary ---")
+    print("\n--- Style Extraction Summary ---")
     for line in result.split("\n"):
         line_stripped = line.strip()
-        if any(kw in line_stripped for kw in ["Scores", "Summary", "Fix Priority", "Failed Items", "Improvement"]):
+        if any(kw in line_stripped for kw in ["CPT recommendation", "GMT font", "Description", "Style category", "GMT Implementation"]):
             print(line_stripped)
 
 
