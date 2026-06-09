@@ -14,7 +14,30 @@ description: >
 
 1. 首先读取当前工作目录下的 `plan.md`，获取绘图计划
 2. 确认所有需要的数据已经就绪（如未就绪，建议用户先运行 `gmt_plot:download`）
-3. 确认 GMT 环境可用（运行 `gmt --version` 检查）
+3. **检查参考脚本**：查看当前目录是否存在 `reference_plot_*.sh` 文件，这些是 `gmt_plot:plan` 阶段从网络博客中提取的参考脚本
+4. 确认 GMT 环境可用（运行 `conda activate gmt && gmt --version` 检查）
+
+## 参考脚本利用
+
+在编写绘图代码之前，**必须先读取并学习**当前目录下的参考脚本（`reference_plot_*.sh`）：
+
+```bash
+# 列出所有参考脚本
+ls reference_plot_*.sh 2>/dev/null
+
+# 逐份读取参考脚本，理解其中的技巧
+cat reference_plot_1.sh
+cat reference_plot_2.sh
+```
+
+**借鉴要点**：
+- 模块组合方式：参考脚本中使用了哪些 GMT 模块，调用顺序是怎样的
+- 参数配置经验：参数值（如 `-I` 渲染强度、`-W` 线宽、`-B` 刻度间隔）可以直接借鉴
+- 色标使用技巧：参考脚本中使用的 CPT 文件和 `makecpt` 参数
+- 布局设计：子图排列、色标位置、插图大小等排版方式
+- 常见陷阱规避：参考脚本注释中标注的注意事项
+
+**重要**：借鉴不等于照抄。应根据 `plan.md` 中的用户需求调整参数，只借鉴通用的技术手法和最佳实践。
 
 ## 代码编写规范
 
@@ -27,7 +50,7 @@ GMT 绘图支持两种方式，优先使用 **Bash GMT 命令**方式（兼容�
 #!/bin/bash
 gmt begin map pdf,png,ps
   gmt basemap -R70/140/15/55 -JM15c -Baf -BWSen+t"标题"
-  gmt grdimage @earth_relief_01m -R70/140/15/55 -JM15c -Cgeo -I+d
+  gmt grdimage @earth_relief_05m -R70/140/15/55 -JM15c -Cgeo -I+d
   gmt coast -R70/140/15/55 -JM15c -W0.5p -N1/0.5p -Slightblue
   gmt colorbar -Cgeo -Baf+l"高程 (m)"
 gmt end
@@ -80,6 +103,8 @@ fig.savefig("map.pdf")
 ### 2. 检查环境
 
 ```bash
+# 先激活gmt环境
+conda activate gmt
 # 检查 GMT 是否安装
 gmt --version
 # 对于 PyGMT，检查 Python 环境
@@ -124,6 +149,11 @@ python3 gmt_plot.py
 
 ```
 ## 绘图结果
+
+### 参考脚本
+- reference_plot_1.sh: [来源URL] — [借鉴了哪些技巧]
+- reference_plot_2.sh: [来源URL] — [借鉴了哪些技巧]
+（如无参考脚本，标注"无"）
 
 ### 执行的脚本
 - 脚本文件: [路径]

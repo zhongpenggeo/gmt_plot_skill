@@ -106,10 +106,81 @@ cat review_user.md
 2. 使用 WebSearch 搜索 "GMT <模块名> docs"
 3. 参考 `../gmt_plot-pipeline/references/gmt-resources.md`
 
+## GMT 模块诊断 Agent
+
+本技能包含一个专用的 **GMT 模块诊断 Agent**（定义文件：`agents/gmt-diagnose.md`）。该 Agent 负责：
+1. 对比反馈与原始绘图脚本，定位涉及的 GMT 命令
+2. 识别对应的 GMT 模块
+3. 从 GMT 官方网站获取对应模块的手册文档
+4. 产出基于官方文档的精确修正方案
+
+### Agent 调用时机
+
+在以下情况应启动此 Agent（可为**每条**反馈独立启动一个 Agent 并行处理）：
+- 反馈涉及 GMT 参数调整，但不确定参数的正确名称或语法
+- 反馈提到某个 GMT 模块的行为不符合预期
+- 反馈涉及多个模块的联动修改
+- 上一轮修改后问题未解决，需要从官方文档确认根本原因
+
+### 如何启动 Agent
+
+使用 `Agent` 工具，为**每一条反馈**独立启动一个 `gmt-diagnose` Agent 实例。Agent 定义位于 `agents/gmt-diagnose.md`，需要将反馈内容和脚本路径作为 prompt 传入。
+
+**基本调用模式：**
+
+```
+Agent(
+  description: "诊断反馈: <一句话描述>",
+  prompt: "请读取 agents/gmt-diagnose.md 中的 Agent 定义，然后按其中定义的流程执行诊断。
+
+## 输入参数
+- feedback: <单条反馈内容>
+- original_script: <原始版本脚本路径>
+- current_script: <当前版本脚本路径>",
+  subagent_type: "general-purpose"
+)
+```
+
+### Agent 输出格式
+
+每个 Agent 返回结构化的诊断报告：
+
+```
+## 诊断结果: [问题简述]
+
+### 涉及的 GMT 模块
+- 模块名: gmt <模块名>
+- 源代码行: [行号和内容]
+
+### 官方文档分析
+- 正确参数: [参数名和格式]
+- 关键说明: [重要备注]
+
+### 修正方案
+- 原代码: `[原始行]`
+- 修改为: `[正确行]`
+- 修改原因: [理由]
+```
+
+### GMT 模块快速参考
+
+常见模块对照（完整列表见 `agents/gmt-diagnose.md`）：
+
+| 模块 | 用途 | 典型反馈关键词 |
+|------|------|--------------|
+| `gmt makecpt` / `gmt colorbar` | 色标 | CPT、颜色范围、色标位置 |
+| `gmt grdimage` | 网格渲染 | 透明度、渲染强度、地形 |
+| `gmt coast` | 海岸线 | 海岸线粗细、填充颜色 |
+| `gmt basemap` | 底图/标注 | 边框、刻度、标题、比例尺 |
+| `gmt text` | 文本 | 标签、字体、字号 |
+| `gmt legend` | 图例 | 图例位置、图例内容 |
+| `gmt inset` | 插图 | 南海小图、插图尺寸 |
+| `gmt grdcontour` | 等值线 | 等高线间距、线型 |
+
 ## 执行流程
 
-### 0. 保存原始资料
-首先把原来的生图脚本和生成的图件都拷贝一份，新命名加入版本相关的，如：
+### 1. 保存原始资料
+首先把原来的生图脚本和生成的图件都拷贝一份，新命名加入`_[version]`相关的，如：
 ```bash
 cp gmt_plot.sh gmt_plot_[version].sh
 cp xxx.ps xxx_[version].ps
@@ -117,35 +188,83 @@ cp xxx.pdf xxx_[version].pdf
 cp xxx.png xxx_[version].png
 ```
 
-### 1. 收集反馈
+### 2. 收集反馈
 
 汇总所有反馈来源：
 - 读取 `review_report_[version].md`（如存在）
 - 记录用户在对话中的修改建议
 - 读取用户指定的建议文件（如提供）
 
-### 2. 制定修改方案
+### 3. 启动 GMT 模块诊断 Agent（可并行）
 
-将反馈整理为具体的修改清单：
+在制定修改方案之前，对于涉及 GMT 模块参数调整的反馈，**为每条反馈独立启动一个 Agent 进行诊断**。多条反馈的 Agent 可在同一轮中并行启动。
+
+**单条反馈的 Agent 调用：**
+
+```
+Agent(
+  description: "诊断 GMT 问题: <反馈要点>",
+  prompt: "请读取 agents/gmt-diagnose.md 中的 Agent 定义，然后按其中定义的流程执行诊断。
+
+## 输入参数
+- feedback: <单条反馈的具体内容>
+- original_script: {原始版本脚本路径}
+- current_script: {当前版本脚本路径}
+
+请严格按照 agents/gmt-diagnose.md 中定义的五步流程执行：理解反馈 → 定位源代码 → 查询官方文档 → 确认正确方案 → 产出诊断报告。",
+  subagent_type: "general-purpose"
+)
+```
+
+**多条反馈并行处理：**
+
+当有多条反馈时，在一次响应中同时发起多个 Agent 调用，每个处理一条反馈。例如：
+
+```
+# 反馈 1: 色标范围不合适
+Agent(description: "诊断: 色标范围", prompt: "...", subagent_type: "general-purpose")
+
+# 反馈 2: 标题字体太大
+Agent(description: "诊断: 标题字体", prompt: "...", subagent_type: "general-purpose")
+
+# 反馈 3: 海岸线太粗
+Agent(description: "诊断: 海岸线粗细", prompt: "...", subagent_type: "general-purpose")
+```
+
+**关键查询方向：**
+- 透明度/渲染参数：Agent 会查询 `grdimage` 的 `-t`、`-I` 参数
+- 色标相关：Agent 会查询 `makecpt` 和 `colorbar` 的参数文档
+- 布局/尺寸：Agent 会查询 `-J` 投影参数和 `-X`/`-Y` 偏移参数
+- 字体/标注：Agent 会查询 `-B` 边框参数和 `FONT_*` 默认参数
+
+**Agent 返回后：** 汇总所有 Agent 返回的诊断报告，作为制定修改方案的依据。
+
+### 4. 制定修改方案
+
+将反馈与 Agent 诊断报告结合，整理为具体的修改清单：
 
 ```
 ## 修改方案
 
 ### 来源: review_report_[version].md / 用户建议 / 建议文件
 
+### GMT 模块诊断: [Agent 诊断报告摘要]
+
 ### 修改项 1: [问题描述]
+- 涉及的 GMT 模块: [模块名]
 - 原始代码: [当前参数/行]
 - 修改为: [新参数/行]
-- 修改原因: [理由]
+- 修改原因: [理由，引用官方文档]
+- 官方文档参考: [文档链接]
 
 ### 修改项 2: ...
 ```
 
-### 3. 执行修改
+### 5. 执行修改
 
 使用 Edit 工具逐项修改绘图脚本文件。每次只改一个具体参数或段落，避免重写整个文件。
 
-### 4. 重新绘图
+### 6. 重新绘图
 
 重新执行绘图脚本（确保输出格式包含 ps）：
 ```bash
@@ -154,7 +273,7 @@ bash gmt_plot.sh
 python3 gmt_plot.py
 ```
 
-### 5. 验证
+### 7. 验证
 
 1. 确认新图件已生成（包括 PS 文件）
 2. 使用 Read 工具查看新图件
@@ -169,6 +288,10 @@ python3 gmt_plot.py
 - review_report_[version].md: [有/无]
 - 用户建议: [有/无 - 内容摘要]
 - 建议文件: [有/无 - 路径]
+
+### GMT 模块诊断
+- [问题 1]: [涉及的模块及根因摘要]
+- [问题 2]: ...
 
 ### 修改内容
 - [修改项 1]: [已修复]
@@ -185,5 +308,6 @@ python3 gmt_plot.py
 
 - 如果你不确定用户的意图，先确认再修改
 - 保留用户未提及的代码部分，只修改需要改的地方
+- **涉及参数调整时，先启动 GMT 模块诊断 Agent 查询官方文档，不要凭记忆猜测参数**
 - 修改前告知用户你的修改计划，获得认可后执行
 - 修改后告知用户可以调用 `gmt_plot:compare` 进行复查（使用 PS 文件）

@@ -37,14 +37,13 @@ gmt --version
 
 ## 阶段一：需求分析与计划制定
 
-调用 `gmt_plot:plan` 技能制定绘图计划。
+调用 `gmt_plot:plan` 技能制定绘图计划`plan.md`。
 
 具体流程：
 1. 仔细分析用户的绘图需求
 2. 如果需要更多信息，主动向用户提问澄清
 3. 制定完整的绘图计划（数据、模块、色标、排版）
-4. **等待用户审阅和确认计划**，用户可以修改计划
-5. 计划确认后，保存为 `plan.md` 到当前工作目录
+4. 计划保存为 `plan.md` 到当前工作目录
 
 参考文件：
 - 读取 `../gmt_plot-download/references/datasets.md` 了解所有可用数据集（GMT 远程数据 + 中文社区数据）
@@ -73,44 +72,37 @@ gmt --version
 流程：
 1. 读取 `plan.md` 获取绘图方案
 2. 确认数据已就绪
-3. 编写 GMT 绘图脚本（优先 Bash GMT 命令格式）
-4. 对于不确定的模块参数，使用 Context7 或 WebSearch 查询文档
-5. 执行脚本，处理错误
-6. 确认输出文件生成
+3. 确认 GMT 环境存在 `conda env list | grep gmt`
+4. 编写 GMT 绘图脚本（优先 Bash GMT 命令格式）
+5. 对于不确定的模块参数，使用 Context7 或 WebSearch 查询文档
+6. 执行脚本，处理错误
+7. 确认输出文件生成
 
 GMT 文档查询：
 - 需要查询模块用法时，使用 Context7 查询 `GenericMappingTools/gmt` 仓库
 - 或使用 WebSearch 搜索 "GMT <模块名> docs generic-mapping-tools"
 - 或使用 WebFetch 访问 https://docs.generic-mapping-tools.org/latest/
 
-## 阶段四：PS 文件评估与反馈
+## 阶段四：图件评估与反馈
 
-调用 `gmt_plot:compare` 技能对图件进行审阅。该技能通过 `scripts/compare_ps.py` 脚本
+调用 `gmt_plot:compare` 技能对图件进行审阅。该技能通过 `scripts/compare_imag.py` 脚本
 读取 GMT 生成的 PS 文件（矢量文本格式），调用 deepseek-v4-pro 模型进行评估。
 
 流程：
-1. 确认环境变量 `DEEPSEEK_API_KEY` 已设置
-2. 确认 PS 文件已由绘图阶段生成并保留
-3. 运行 `scripts/compare_ps.py <PS文件> plan.md review_report_[version].md` 调用模型评估
-4. 模型从六个维度（地理范围、数据呈现、标注完整性、排版美观、需求一致性、技术质量）进行评估
-5. 输出结构化审阅报告 `review_report_[version].md`,version表示第几轮审阅
-6. 报告包含不合格项、需改进项、修改优先级和具体修改建议
-
-**首次使用前**需设置环境变量：
-```bash
-export DEEPSEEK_API_KEY=your-deepseek-api-key
-```
-并安装依赖：`pip install requests`
+1. 确认环境变量文件 `.env` 已存在
+2. 确认 png/jpg 文件已由绘图阶段生成并保留
+3. 调用多模态模型评估
+4. 输出结构化审阅报告 `review_report_[version].md`,version表示第几轮审阅，报告包含不合格项、需改进项、修改优先级和具体修改建议
 
 ## 阶段五：修饰与迭代
 
 调用 `gmt_plot:polish` 技能进行代码修改和迭代。该技能可独立运行，接受多种反馈来源。
 
 流程：
-0. 先把生图脚本和图件都保存一份，名字后面加上`_[version]`
+0. 先把生图脚本（如`gmt_plot.sh`）和图件(ps、png、jpg)都保存一份，名字后面加上`_[version]`
 1. 读取 `review_report_[version].md` 中的视觉模型反馈（或用户直接提出的修改建议）
 2. 按优先级（数据错误 > 功能缺失 > 标注问题 > 视觉质量 > 排版微调）制定修改方案
-3. 使用 Edit 工具修改 GMT 绘图脚本
+3. 使用 Edit 工具修改 GMT 绘图脚本`gmt_plot.sh`
 4. 重新执行绘图：`bash gmt_plot.sh` 或 `python3 gmt_plot.py`
 5. 返回阶段四进行视觉对比复查
 6. 如果仍有问题且未超过 3 轮，继续迭代
@@ -145,7 +137,6 @@ export DEEPSEEK_API_KEY=your-deepseek-api-key
 
 ### 最终图件
 - 文件路径: [绝对路径]
-- PS 文件: [.ps 文件路径]
 - 文件格式: [PS/PDF/PNG/JPG]
 - 文件大小: [大小]
 
