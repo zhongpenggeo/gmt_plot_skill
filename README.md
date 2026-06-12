@@ -161,6 +161,7 @@ conda install anthropic requests
 # 5. 在 Claude Code 中开始绘图
 claude 
 # /gmt_plot:pipeline 绘制中国南海地区的etopo1地形图，要求绘制阴影强度，使用etopo色标，位置在右下角，竖直色标，添加海岸线，非海洋地区设置为白色掩膜
+# /gmt_plot:polish 用户自行反馈绘图存在的问题
 ```
 
 ### 环境要求
@@ -233,3 +234,4 @@ gmt_plot_skill/
 
 ### version
 v0: 初始版本，目前skill全部用中文编写的，便于修改，后期将全部修改为英文
+v1：去除用VLM反馈，测试效果很差还费钱，性价比不高，暂时方案是增强plan，分配好各个地图要素的位置，同时保留polish技能用于用户反馈绘图存在的问题让agent去改。全自动变为半自动，因为实在做不到全自动。
