@@ -49,6 +49,7 @@ GMT 绘图支持两种方式，优先使用 **Bash GMT 命令**方式（兼容�
 ```bash
 #!/bin/bash
 gmt begin map pdf,png,ps
+  gmt set PS_PAGE_ORIENTATION portrait
   gmt basemap -R70/140/15/55 -JM15c -Baf -BWSen+t"标题"
   gmt grdimage @earth_relief_05m -R70/140/15/55 -JM15c -Cgeo -I+d
   gmt coast -R70/140/15/55 -JM15c -W0.5p -N1/0.5p -Slightblue
@@ -71,12 +72,13 @@ fig.savefig("map.pdf")
 
 1. 严格按照 plan.md 中的方案编写代码
 2. 使用 GMT 现代模式（`gmt begin` / `gmt end`）或 PyGMT
-3. 合理设置 `-R`（区域）和 `-J`（投影）参数
-4. 正确使用 `-B` 设置边框和刻度
-5. 确保色标（CPT）与数据类型匹配
-6. 添加必要的 `-I+d` 做地形渲染（地形图）
-7. 添加 `-V` 或 `-Vd` 参数以便调试时查看详细输出
-8. **必须保留 PS 文件**：`gmt begin` 的输出格式中必须包含 `ps`（如 `pdf,png,ps`），生成的 PS 文件不要删除，供后续 compare 阶段使用
+3. 必须设置为portrait模式：`gmt set PS_PAGE_ORIENTATION portrait`
+4. 合理设置 `-R`（区域）和 `-J`（投影）参数
+5. 正确使用 `-B` 设置边框和刻度
+6. 确保色标（CPT）与数据类型匹配
+7. 添加必要的 `-I+d` 做地形渲染（地形图）
+8. 添加 `-V` 或 `-Vd` 参数以便调试时查看详细输出
+9. **必须保留 PS 文件**：`gmt begin` 的输出格式中必须包含 `ps`（如 `pdf,png,ps`），生成的 PS 文件不要删除，供后续 compare 阶段使用
 
 ### 查询 GMT 用法
 

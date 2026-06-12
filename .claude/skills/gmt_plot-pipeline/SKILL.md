@@ -15,7 +15,7 @@ description: >
 ## 全流程概览
 
 ```
-用户需求 → [1.计划] → [2.下载数据] → [3.绘图]
+用户需求 → [1.计划] → [2.下载数据] → [3.绘图] → [4.图件校验]
 ```
 
 ## 环境检查
@@ -39,9 +39,10 @@ gmt --version
 
 具体流程：
 1. 仔细分析用户的绘图需求
-2. 如果需要更多信息，主动向用户提问澄清
-3. 制定完整的绘图计划（数据、模块、色标、排版）
-4. 计划保存为 `plan.md` 到当前工作目录
+2. 用websearch从网络上搜索相关的经验
+3. 如果需要更多信息，主动向用户提问澄清
+4. 制定完整的绘图计划（数据、模块、色标、排版）
+5. 计划保存为 `plan.md` 到当前工作目录
 
 参考文件：
 - 读取 `../gmt_plot-download/references/datasets.md` 了解所有可用数据集（GMT 远程数据 + 中文社区数据）
@@ -81,6 +82,34 @@ GMT 文档查询：
 - 或使用 WebSearch 搜索 "GMT <模块名> docs generic-mapping-tools"
 - 或使用 WebFetch 访问 https://docs.generic-mapping-tools.org/latest/
 
+## 阶段四：图件布局校验
+
+绘制完成后，调用 `gmt_plot:verify` 技能对生成的图件进行布局校验，确保排版质量。
+
+流程：
+1. 确认 PNG/JPG 图件已生成
+2. 确保 OpenCV 已安装：`pip install opencv-python-headless numpy Pillow`
+3. 运行校验脚本：
+   ```bash
+   python3 ../gmt_plot-verify/scripts/verify_plot.py <图件路径> --output verify_report.md --output-dir <输出目录>
+   ```
+4. 读取 `verify_report.md`，查看校验结果
+5. 如果存在 **❌ 不合格项**（如色标与主图框间距不足、元素重叠等），应告知用户并建议调用 `gmt_plot:polish` 进行修复
+6. 如果仅有 **⚠️ 需改进项**，告知用户可选优化
+7. 如果全部通过，确认图件布局质量合格
+
+校验项目包括：
+- 色标与主图框间距（最小 2 像素或短边的 0.5%）
+- 图例与主图间距
+- 图例位置合理性（是否置于信息稀疏区域）
+- 图例内部文字与标识重叠检测
+- 元素越界检测
+- 标注重叠检测
+
+与 gmt_plot:compare 的区别：
+- `compare` 使用视觉模型做整体审美和内容一致性评估
+- `verify` 使用 PIL 做精确的像素级布局检测
+- 两者互补，可在 pipeline 中先后使用
 
 
 ## 重要原则
